@@ -1,8 +1,10 @@
+local env = require("env")
+
 local notify = {}
 
 --你的wifi名称和密码,仅2.4G
-local wifiName = ""
-local wifiPasswd = ""
+local wifiName = env.wifiName
+local wifiPasswd = env.wifiPasswd
 
 --短信接收指令的标记（密码）
 --[[
@@ -10,30 +12,32 @@ local wifiPasswd = ""
 C[cmdTag]REBOOT：重启
 C[cmdTag]SEND[手机号][空格][短信内容]：主动发短信
 ]]
-local cmdTag = "1234"
+local cmdTag = env.cmdTag
 
 --这里默认用的是LuatOS社区提供的推送服务，无使用限制
 --官网：https://push.luatos.org/ 点击GitHub图标登陆即可
 --支持邮件/企业微信/钉钉/飞书/电报/IOS Bark
 
 --使用哪个推送服务
---可选：luatos/serverChan/pushover
-local useServer = "luatos"
+--可选：luatos/serverChan/pushover/feishu
+local useServer = env.useServer
 
 --LuatOS社区提供的推送服务 https://push.luatos.org/ ，用不到可留空
 --这里填.send前的字符串就好了
 --如：https://push.luatos.org/ABCDEF1234567890ABCD.send/{title}/{data} 填入 ABCDEF1234567890ABCD
-local luatosPush = "ABCDEF1234567890ABCD"
+local luatosPush = env.luatosPush
 
 --server酱的配置，用不到可留空，免费用户每天仅可发送五条推送消息
 --server酱的SendKey，如果你用的是这个就需要填一个
 --https://sct.ftqq.com/sendkey 申请一个
-local serverKey = ""
+local serverKey = env.serverKey
 
 --pushover配置，用不到可留空
-local pushoverApiToken = ""
-local pushoverUserKey = ""
+local pushoverApiToken = env.pushoverApiToken
+local pushoverUserKey = env.pushoverUserKey
 
+--飞书群机器人配置
+local feishuRobotUrl = env.feishuRobotUrl
 
 --缓存消息
 local buff = {}
@@ -112,6 +116,45 @@ sys.taskInit(function()
                         code, h, body = http.request(
                                 "POST",
                                 "https://api.pushover.net/1/messages.json",
+                                {["Content-Type"] = "application/json; charset=utf-8"},
+                                json_body
+                            ).wait()
+                        log.info("notify","pushed sms notify",code,h,body,sms[1])
+                        if code == 200 then
+                            break
+                        end
+                        sys.wait(5000)
+                    end
+                elseif useServer == "feishu" then --飞书
+                    log.info("notify","send to feishu",data)
+                    local body = {
+                        msg_type = "post",
+                        content = {
+                            post = {
+                                zh_cn = {
+                                    title = "收到一条短信息",
+                                    content = {
+                                        {
+                                            {
+                                                tag = "text",
+                                                text = data
+                                            },
+                                            {
+                                                tag = "text",
+                                                text = "\n\n来自："..sms[1]
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    local json_body = string.gsub(json.encode(body), "\\b", "\\n") --luatos bug
+                    --多试几次好了
+                    for i=1,10 do
+                        code, h, body = http.request(
+                                "POST",
+                                feishuRobotUrl,
                                 {["Content-Type"] = "application/json; charset=utf-8"},
                                 json_body
                             ).wait()
