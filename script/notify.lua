@@ -164,6 +164,31 @@ sys.taskInit(function()
                         end
                         sys.wait(5000)
                     end
+                elseif useServer == "bark" then --Bark
+                    log.info("notify","send to bark",data)
+                    local body = {
+                        title = "收到一条短信息",
+                        body = data.."\n\n来自："..sms[1],
+                        device_key = env.barkDeviceKey,
+                        badge = 1,
+                        category = "SMS Forward",
+                        group = "SMS Forward"
+                    }                    
+                    local json_body = string.gsub(json.encode(body), "\\b", "\\n") --luatos bug
+                    --多试几次好了
+                    for i=1,10 do
+                        code, h, body = http.request(
+                                "POST",
+                                env.barkUrl,
+                                {["Content-Type"] = "application/json; charset=utf-8"},
+                                json_body
+                            ).wait()
+                        log.info("notify","pushed sms notify",code,h,body,sms[1])
+                        if code == 200 then
+                            break
+                        end
+                        sys.wait(5000)
+                    end
                 else--luatos推送服务
                     data = data:gsub("%%","%%25")
                     :gsub("+","%%2B")
